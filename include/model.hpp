@@ -4,6 +4,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include <array>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -35,19 +36,20 @@ private:
   std::size_t m_height{};
 };
 
-struct Vertex {
-  glm::vec3& position{};
-  glm::vec2& texture_coord{};
-};
-
-using Triangle = std::array<Vertex, 3>;
-
-struct Mesh {
-  std::vector<Triangle> faces{};
-  Texture& texture{};
-};
-
 class Model final {
+public:
+  struct Vertex {
+    glm::vec3& position;
+    glm::vec2& texture_coord;
+  };
+
+  using Triangle = std::array<Vertex, 3>;
+
+  struct Mesh {
+    std::vector<Triangle> faces;
+    Texture& texture;
+  };
+
 private:
   std::vector<Mesh> m_meshes{};
   std::vector<glm::vec3> m_positions{};
