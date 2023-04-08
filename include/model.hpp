@@ -8,7 +8,15 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
+
+struct Vertex {
+  glm::vec3& position;
+  glm::vec2& texture_coord;
+};
+
+using Triangle = std::array<Vertex, 3>;
 
 class Texture final {
 public:
@@ -36,19 +44,14 @@ private:
   std::size_t m_height{};
 };
 
+struct Mesh {
+  std::vector<Triangle> faces{};
+  Texture& texture;
+};
+
 class Model final {
 public:
-  struct Vertex {
-    glm::vec3& position;
-    glm::vec2& texture_coord;
-  };
-
-  using Triangle = std::array<Vertex, 3>;
-
-  struct Mesh {
-    std::vector<Triangle> faces;
-    Texture& texture;
-  };
+  friend Model import_model(const std::string& file_path);
 
 private:
   std::vector<Mesh> m_meshes{};

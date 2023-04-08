@@ -12,6 +12,6 @@ using MaterialLib = std::map<std::string, Material>;
 
 Model import_model(const std::string& file_path);
 std::string find_mtllib_name(std::ifstream& file);
-MaterialLib import_mtl(const std::string& directory, const std::string& file_path);
+MaterialLib import_mtl(std::ifstream& obj_file, const std::string& directory);
 
 #endif
