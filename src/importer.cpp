@@ -1,151 +1,192 @@
 #include "importer.hpp"
 
-#include <array>
-#include <cassert>
+#include <SFML/Graphics/Image.hpp>
+
+#include <algorithm>
+#include <cstdint>
 #include <fstream>
-#include <stdexcept>
-#include <string_view>
+#include <iostream>
+#include <limits>
+#include <map>
+#include <optional>
+#include <sstream>
 #include <utility>
 #include <vector>
 
-using Tokens = std::vector<std::string>;
-Tokens split(std::string_view str, char delimiter)
+auto import_texture(const std::string& texture_path) -> std::optional<Texture>
 {
-  Tokens tokens{};
-  std::string token{ "" };
-  for (; str.length() > 0; str.remove_prefix(1)) {
-    if (str.at(0) == delimiter) {
-      tokens.push_back(std::move(token));
-      token = "";
-    }
-    else {
-      token += str.at(0);
-    }
+  auto image = sf::Image{};
+  if (!image.loadFromFile(texture_path)) {
+    std::cerr << "Could not load the texture " << texture_path << '\n';
+    return {};
   }
-  return tokens;
+  auto size{ image.getSize() };
+  const auto* begin{ reinterpret_cast<const std::uint32_t*>(image.getPixelsPtr()) };
+  return Texture{ { begin, begin + size.x * size.y }, size.x, size.y };
 }
 
 // return the directory with a trailing '/'
-std::string get_directory(const std::string& file_path)
+auto get_directory(const std::string& file_path) -> std::string
 {
   auto index{ file_path.find_last_of('/') };
   return (index == std::string::npos) ? "./" : file_path.substr(0, index + 1);
 }
 
-std::string get_material_name(const std::string& line)
+using Material = Texture;
+using MaterialLib = std::map<std::string, Material>;
+auto import_mtllib(const std::string& mtllib_path) -> std::optional<MaterialLib>
 {
-  auto space_index{ line.find(' ') };
-  if (space_index == std::string::npos)
-    throw std::invalid_argument{ "Could not get material name" };
-  return line.substr(space_index + 1);
-}
+  auto mtl = std::ifstream{ mtllib_path };
+  if (!mtl) {
+    std::cerr << "Could not open the file: " << mtllib_path << '\n';
+    return {};
+  }
+  auto output = MaterialLib{};
+  while (mtl) {
+    auto line = std::string{};
+    std::getline(mtl, line);
+    if (line.starts_with('#') || line.length() == 0) continue;
+    auto line_stream = std::stringstream{ line };
+    auto head = std::string{};
+    std::getline(line_stream, head, ' ');
 
-glm::vec3 get_geometric_vertex(const Tokens& tokens)
-{
-  if (tokens.size() != 4)
-    throw std::invalid_argument{ "Invalid geometric vertex" };
-  return { std::stof(tokens.at(1)), std::stof(tokens.at(2)), std::stof(tokens.at(3)) };
-}
-
-glm::vec2 get_texture_coordinate(const Tokens& tokens)
-{
-  if (tokens.size() != 3)
-    throw std::invalid_argument{ "Invalid texture coordinate" };
-  return { std::stof(tokens.at(1)), std::stof(tokens.at(2)) };
-}
-
-struct VertexIndices {
-  std::size_t position{};
-  std::size_t texture_coord{};
-};
-
-VertexIndices get_vertex_indices(std::string_view vertex)
-{
-  auto tokens{ split(vertex, '/') };
-  if (tokens.size() < 2 || tokens.size() > 3)
-    throw std::invalid_argument{ "Invalid number of face indices" };
-  return {
-    std::stoul(tokens.at(0)) - 1,
-    std::stoul(tokens.at(1)) - 1
-  };
-}
-
-using Face = std::array<VertexIndices, 3>;
-Face get_face(const Tokens& tokens)
-{
-  if (tokens.size() != 4)
-    throw std::invalid_argument{ "Invalid face" };
-  auto first{ get_vertex_indices(tokens.at(1)) };
-  auto second{ get_vertex_indices(tokens.at(2)) };
-  auto third{ get_vertex_indices(tokens.at(3)) };
-  return { first, second, third };
-}
-
-// Wavefront obj importer
-Model import_model(const std::string& file_path)
-{
-  std::ifstream file{ file_path };
-  if (!file)
-    throw std::invalid_argument{ "Could not open obj file" };
-  MaterialLib material_lib{ import_mtl(file, get_directory(file_path)) };
-  Model output{};
-  while (file) {
-    std::string line{};
-    std::getline(file, line);
-    if (line.length() == 0) continue;
-    Tokens tokens{ split(line, ' ') };
-    if (tokens.at(0) == "usemtl") {
-      auto material_name{ get_material_name(line) };
-      // create mesh with a bound texture
-    }
-    if (tokens.at(0) == "v") {
-      auto position{ get_geometric_vertex(tokens) };
-      output.m_positions.push_back(position);
-    }
-    if (tokens.at(0) == "vt") {
-      auto texture_coord{ get_texture_coordinate(tokens) };
-      output.m_texture_coords.push_back(texture_coord);
-    }
-    if (tokens.at(0) == "f") {
-      if (output.m_meshes.size() == 0)
-        throw std::invalid_argument{ "usemtl must be set before a face element" };
-      auto face{ get_face(tokens) };
-      try {
-        Vertex v1{ output.m_positions.at(face[0].position), output.m_texture_coords.at(face[0].texture_coord) };
-        Vertex v2{ output.m_positions.at(face[1].position), output.m_texture_coords.at(face[1].texture_coord) };
-        Vertex v3{ output.m_positions.at(face[2].position), output.m_texture_coords.at(face[2].texture_coord) };
-        output.m_meshes.back().faces.push_back({ v1, v2, v3 });
+    if (head == "newmtl") {
+      auto material_name = std::string{};
+      std::getline(line_stream, material_name);
+      if (!line_stream) {
+        std::cerr << "Could not parse the material name on line: " << line << '\n';
+        return {};
       }
-      catch (const std::out_of_range& e) {
-        throw std::invalid_argument{ "Invalid face indices" };
+      while (std::getline(mtl, line)) {
+        if (line.starts_with('#') || line.length() == 0) continue;
+        line_stream.str(line);
+        line_stream.clear();
+        std::getline(line_stream, head, ' ');
+        if (head == "newmtl") {
+          std::cerr << "Could not find the diffuse map for material " << material_name << '\n';
+          return {};
+        }
+        else if (head == "map_Kd") {
+          auto texture_name = std::string{};
+          std::getline(line_stream, texture_name);
+          if (!line_stream) {
+            std::cerr << "Could not parse the diffuse map name on line: " << line << '\n';
+            return {};
+          }
+          auto texture = import_texture(get_directory(mtllib_path) + texture_name);
+          if (!texture) return {};
+          output.insert(std::pair{ material_name, std::move(*texture) });
+          break;
+        }
       }
     }
+  }
+  if (output.empty()) {
+    std::cerr << "no materials defined on the mtl file " << mtllib_path << '\n';
+    return {};
   }
   return output;
 }
 
-std::string find_mtllib_name(std::ifstream& file)
+// Wavefront obj importer
+//   accepts triangulated faces
+//   accepts at least one material with a diffuse map
+
+// tasks:
+//   use std::move on Texture objects to improve performance
+//   use std::move on std::string objects to improve performance
+auto import_model(const std::string& obj_path) -> std::optional<Model>
 {
-  while (file) {
-    std::string line{};
-    std::getline(file, line);
-    if (line.starts_with("mtllib")) {
-      auto space_index{ line.find(' ') };
-      if (space_index == std::string::npos)
-        throw std::invalid_argument{ "Could not get mtllib file name" };
-      return line.substr(space_index + 1);
+  auto obj = std::ifstream{ obj_path };
+  if (!obj) {
+    std::cerr << "Could not open the file: " << obj_path << '\n';
+    return {};
+  }
+  auto positions = std::vector<glm::vec3>{};
+  auto texture_coords = std::vector<glm::vec2>{};
+  auto output = Model{};
+  auto material_lib = MaterialLib{};
+  while (obj) {
+    auto line = std::string{};
+    std::getline(obj, line);
+    if (line.starts_with('#') || line.length() == 0) continue;
+    auto line_stream = std::stringstream{ line };
+    auto head = std::string{};
+    std::getline(line_stream, head, ' ');
+
+    if (head == "mtllib") {
+      auto material_lib_name = std::string{};
+      std::getline(line_stream, material_lib_name);
+      if (!line_stream) {
+        std::cerr << "Could not parse the material lib name on line: " << line << '\n';
+        return {};
+      }
+      auto optional = import_mtllib(get_directory(obj_path) + material_lib_name);
+      if (!optional) return {};
+      material_lib = std::move(*optional);
+    }
+    else if (head == "usemtl") {
+      auto material_name = std::string{};
+      std::getline(line_stream, material_name);
+      if (!line_stream) {
+        std::cerr << "Could not parse the material name on line: " << line << '\n';
+        return {};
+      }
+      if (!material_lib.contains(material_name)) {
+        std::cerr << "Could not find the material " << material_name << " in the material lib."
+                  << " Occurred on the line: " << line << '\n';
+        return {};
+      }
+      output.meshes.push_back(Mesh{ std::move(material_lib.at(material_name)) });
+      material_lib.erase(material_name);
+    }
+    else if (head == "v") {
+      auto position = glm::vec3{};
+      line_stream >> position.x >> position.y >> position.z;
+      if (!line_stream) {
+        std::cerr << "Could not parse the geometric vertex on line: " << line << '\n';
+        return {};
+      }
+      positions.push_back(position);
+    }
+    else if (head == "vt") {
+      auto texture_coord = glm::vec2{};
+      line_stream >> texture_coord.x >> texture_coord.y;
+      if (!line_stream) {
+        std::cerr << "Could not parse the texture coordinate on line: " << line << '\n';
+        return {};
+      }
+      texture_coords.push_back(texture_coord);
+    }
+    else if (head == "f") {
+      if (output.meshes.size() == 0) {
+        std::cerr << "usemtl must be set before a face element\n";
+        return {};
+      }
+      auto face = Mesh::Face{};
+      for (auto index = 0UZ; index < 3UZ; ++index) {
+        auto position_index = std::size_t{};
+        line_stream >> position_index;
+        line_stream.get();
+        auto texture_coord_index = std::size_t{};
+        line_stream >> texture_coord_index;
+        if (!line_stream) {
+          std::cerr << "Could not parse indices on line: " << line << '\n';
+          return {};
+        }
+        if (position_index > positions.size() || texture_coord_index > texture_coords.size()) {
+          std::cerr << "Invalid indices on line: " << line << '\n';
+          return {};
+        }
+        line_stream.ignore(std::numeric_limits<std::streamsize>::max(), ' ');
+        face.at(index) = Vertex{ positions.at(position_index - 1), texture_coords.at(texture_coord_index - 1) };
+      }
+      output.meshes.back().faces.push_back(face);
     }
   }
-  throw std::invalid_argument{ "Could not find mtllib" };
-}
-
-MaterialLib import_mtl(std::ifstream& obj_file, const std::string& directory)
-{
-  std::string mtllib_name{ find_mtllib_name(obj_file) };
-  obj_file.seekg(std::ios::beg);
-  std::ifstream mtl_file{ directory + mtllib_name };
-  if (!mtl_file)
-    throw std::invalid_argument{ "Could not open mtl file" };
-  MaterialLib material_lib{};
-  return material_lib;
+  if (output.meshes.size() == 0) {
+    std::cerr << "Could not import any model meshes on file " << obj_path << '\n';
+    return {};
+  }
+  return output;
 }

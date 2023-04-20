@@ -3,15 +3,9 @@
 
 #include "model.hpp"
 
-#include <fstream>
-#include <map>
+#include <optional>
 #include <string>
 
-using Material = Texture;
-using MaterialLib = std::map<std::string, Material>;
-
-Model import_model(const std::string& file_path);
-std::string find_mtllib_name(std::ifstream& file);
-MaterialLib import_mtl(std::ifstream& obj_file, const std::string& directory);
+auto import_model(const std::string& obj_path) -> std::optional<Model>;
 
 #endif

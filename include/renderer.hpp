@@ -1,11 +1,13 @@
-#ifndef _3D_FROM_SCRATCH_GRAPHICS_HPP
-#define _3D_FROM_SCRATCH_GRAPHICS_HPP
+#ifndef _3D_FROM_SCRATCH_RENDERER_HPP
+#define _3D_FROM_SCRATCH_RENDERER_HPP
 
+#include <SFML/Graphics.hpp>
 #include <glm/gtx/compatibility.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -14,18 +16,21 @@
 #include <utility>
 #include <vector>
 
-class Graphics final {
+class Renderer final {
 public:
-  Graphics(std::size_t screen_width, std::size_t screen_height)
-    : m_screen_width{ screen_width },
-      m_screen_height{ screen_height },
-      m_screen(screen_width * screen_height)
+  friend bool update_window(sf::RenderWindow& window, const Renderer& renderer);
+
+  Renderer(std::size_t render_width, std::size_t render_height)
+    : m_render_width{ render_width },
+      m_render_height{ render_height },
+      m_colors(render_width * render_height)
   {
   }
 
   void plot(std::size_t x, std::size_t y, std::uint32_t color)
   {
-    m_screen[y * m_screen_width + x] = color;
+    assert(x < m_render_width && y < m_render_height);
+    m_colors[y * m_render_width + x] = color;
   }
 
   void plot_vertical_line(glm::ivec2 begin, const glm::ivec2& end)
@@ -63,7 +68,7 @@ public:
     auto increment_x{ begin.x < end.x ? 1 : -1 };
     auto increment_y{ begin.y < end.y ? 1 : -1 };
     auto error{ distance_x + distance_y };
-    // auto t{ 0.0 }; // interpolation coefficient
+    // auto t{ 0.0 }; // interpolation parameter
     // auto t_increment{ 1.0 / std::sqrt(distance_x * distance_x + distance_y * distance_y) };
     while (true) {
       plot(
@@ -86,23 +91,13 @@ public:
     }
   }
 
-  void save_image()
-  {
-    std::ofstream file{ "output.ppm", std::ios::binary };
-    file << "P6\n"
-         << m_screen_width << ' ' << m_screen_height << '\n'
-         << "255\n";
-    for (const auto& color : m_screen) {
-      file << static_cast<char>(color >> 24)
-           << static_cast<char>((color & 0x00FF0000) >> 16)
-           << static_cast<char>((color & 0x0000FF00) >> 8);
-    }
-  }
+  std::size_t render_width() const { return m_render_width; }
+  std::size_t render_height() const { return m_render_height; }
 
 private:
-  std::size_t m_screen_width{};
-  std::size_t m_screen_height{};
-  std::vector<std::uint32_t> m_screen{};
+  std::size_t m_render_width{};
+  std::size_t m_render_height{};
+  std::vector<std::uint32_t> m_colors{};
 };
 
 #endif

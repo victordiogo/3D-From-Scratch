@@ -18,20 +18,20 @@ list(REMOVE_ITEM bench_files ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp)
 set(gcc_like_cxx "$<COMPILE_LANG_AND_ID:CXX,ARMClang,AppleClang,Clang,GNU,LCC>")
 set(msvc_cxx "$<COMPILE_LANG_AND_ID:CXX,MSVC>")
 set(compile_options
-  "$<${gcc_like_cxx}:-pedantic-errors;-Wall;-Weffc++;-Wextra;-Wsign-conversion;-Wconversion>"
+  "$<${gcc_like_cxx}:-pedantic-errors;-Wall;-Werror;-Weffc++;-Wextra;-Wsign-conversion;-Wconversion>"
   "$<${msvc_cxx}:/permissive-;/W4;/WX>"
 )
 
 find_package(benchmark REQUIRED)
 find_package(glm REQUIRED)
+find_package(SFML COMPONENTS graphics REQUIRED)
 
 include(FetchContent)
+
 FetchContent_Declare(
   googletest
   URL https://github.com/google/googletest/archive/f063cd25c90cbd4089a0ff96f5991df4f2721338.zip
 )
-
-# For Windows: Prevent overriding the parent project's compiler/linker settings
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 
 FetchContent_MakeAvailable(googletest)
@@ -42,15 +42,7 @@ target_compile_options(${program_executable_name} PRIVATE ${compile_options})
 target_link_libraries(
   ${program_executable_name}
   glm::glm
-)
-
-add_executable(${bench_executable_name} ${bench_files})
-target_include_directories(${bench_executable_name} PRIVATE include)
-target_compile_options(${bench_executable_name} PRIVATE ${compile_options})
-target_link_libraries(
-  ${bench_executable_name}
-  benchmark::benchmark
-  glm::glm
+  sfml-graphics
 )
 
 add_executable(${test_executable_name} ${test_files})
@@ -60,6 +52,17 @@ target_link_libraries(
   ${test_executable_name}
   GTest::gtest_main
   glm::glm
+  sfml-graphics
+)
+
+add_executable(${bench_executable_name} ${bench_files})
+target_include_directories(${bench_executable_name} PRIVATE include)
+target_compile_options(${bench_executable_name} PRIVATE ${compile_options})
+target_link_libraries(
+  ${bench_executable_name}
+  benchmark::benchmark
+  glm::glm
+  sfml-graphics
 )
 
 enable_testing()
