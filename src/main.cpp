@@ -26,9 +26,10 @@ bool update_window(sf::RenderWindow& window, const Renderer& renderer)
 // analyze reinterpret_cast alternatives
 auto main() -> int
 {
-  Timer timer{};
-  auto model = import_model("C:/Users/Victor/Documents/3d_models/Artorias/model.obj");
-  std::cout << timer.elapsed() << '\n';
+  auto model_path = std::string{};
+  std::cout << "Enter the model obj file path (with \"/\" delimiters): ";
+  std::getline(std::cin >> std::ws, model_path);
+  auto model = import_model(model_path);
   if (!model) return 1;
 
   constexpr auto width = 1280;

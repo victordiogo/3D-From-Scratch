@@ -13,6 +13,8 @@
 #include <utility>
 #include <vector>
 
+#include "timer.hpp"
+
 auto import_texture(const std::string& texture_path) -> std::optional<Texture>
 {
   auto image = sf::Image{};
@@ -20,9 +22,13 @@ auto import_texture(const std::string& texture_path) -> std::optional<Texture>
     std::cerr << "Could not load the texture " << texture_path << '\n';
     return {};
   }
-  auto size{ image.getSize() };
-  const auto* begin{ reinterpret_cast<const std::uint32_t*>(image.getPixelsPtr()) };
-  return Texture{ { begin, begin + size.x * size.y }, size.x, size.y };
+  auto size = image.getSize();
+  auto colors = std::vector<std::uint32_t>(size.x * size.y);
+  for (auto pixel = 0U; pixel < size.x * size.y; ++pixel) {
+    colors.at(pixel)
+      = image.getPixel(pixel % size.x, pixel / size.x).toInteger();
+  }
+  return Texture{ std::move(colors), size.x, size.y };
 }
 
 // return the directory with a trailing '/'
@@ -38,7 +44,7 @@ auto import_mtllib(const std::string& mtllib_path) -> std::optional<MaterialLib>
 {
   auto mtl = std::ifstream{ mtllib_path };
   if (!mtl) {
-    std::cerr << "Could not open the file: " << mtllib_path << '\n';
+    std::cerr << "Could not open the file " << mtllib_path << '\n';
     return {};
   }
   auto output = MaterialLib{};
@@ -75,14 +81,14 @@ auto import_mtllib(const std::string& mtllib_path) -> std::optional<MaterialLib>
           }
           auto texture = import_texture(get_directory(mtllib_path) + texture_name);
           if (!texture) return {};
-          output.insert(std::pair{ material_name, std::move(*texture) });
+          output.insert(std::pair{ std::move(material_name), std::move(*texture) });
           break;
         }
       }
     }
   }
   if (output.empty()) {
-    std::cerr << "no materials defined on the mtl file " << mtllib_path << '\n';
+    std::cerr << "No materials defined on the mtl file " << mtllib_path << '\n';
     return {};
   }
   return output;
@@ -91,10 +97,6 @@ auto import_mtllib(const std::string& mtllib_path) -> std::optional<MaterialLib>
 // Wavefront obj importer
 //   accepts triangulated faces
 //   accepts at least one material with a diffuse map
-
-// tasks:
-//   use std::move on Texture objects to improve performance
-//   use std::move on std::string objects to improve performance
 auto import_model(const std::string& obj_path) -> std::optional<Model>
 {
   auto obj = std::ifstream{ obj_path };
@@ -113,7 +115,6 @@ auto import_model(const std::string& obj_path) -> std::optional<Model>
     auto line_stream = std::stringstream{ line };
     auto head = std::string{};
     std::getline(line_stream, head, ' ');
-
     if (head == "mtllib") {
       auto material_lib_name = std::string{};
       std::getline(line_stream, material_lib_name);
@@ -147,7 +148,7 @@ auto import_model(const std::string& obj_path) -> std::optional<Model>
         std::cerr << "Could not parse the geometric vertex on line: " << line << '\n';
         return {};
       }
-      positions.push_back(position);
+      positions.push_back(std::move(position));
     }
     else if (head == "vt") {
       auto texture_coord = glm::vec2{};
@@ -156,7 +157,7 @@ auto import_model(const std::string& obj_path) -> std::optional<Model>
         std::cerr << "Could not parse the texture coordinate on line: " << line << '\n';
         return {};
       }
-      texture_coords.push_back(texture_coord);
+      texture_coords.push_back(std::move(texture_coord));
     }
     else if (head == "f") {
       if (output.meshes.size() == 0) {
@@ -181,7 +182,7 @@ auto import_model(const std::string& obj_path) -> std::optional<Model>
         line_stream.ignore(std::numeric_limits<std::streamsize>::max(), ' ');
         face.at(index) = Vertex{ positions.at(position_index - 1), texture_coords.at(texture_coord_index - 1) };
       }
-      output.meshes.back().faces.push_back(face);
+      output.meshes.back().faces.push_back(std::move(face));
     }
   }
   if (output.meshes.size() == 0) {
