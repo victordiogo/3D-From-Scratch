@@ -8,7 +8,7 @@
 
 #include <stdexcept>
 
-bool update_window(sf::RenderWindow& window, const Renderer& renderer)
+auto update_window(sf::RenderWindow& window, const Renderer& renderer) -> bool
 {
   auto texture = sf::Texture{};
   if (!texture.create(
@@ -22,8 +22,6 @@ bool update_window(sf::RenderWindow& window, const Renderer& renderer)
   return true;
 }
 
-// to do: "if"s with more than 1 line must have brackets
-// analyze reinterpret_cast alternatives
 auto main() -> int
 {
   auto model_path = std::string{};
@@ -45,7 +43,8 @@ auto main() -> int
       }
     }
 
-    renderer.plot_line(glm::ivec2{ 0, 0 }, glm::ivec2{ 500, 100 });
+    renderer.clear();
+    renderer.render(*model);
     update_window(window, renderer);
     window.display();
     window.setTitle("Render time: " + std::to_string(timer.elapsed()) + "ms");

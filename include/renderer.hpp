@@ -1,7 +1,11 @@
 #ifndef _3D_FROM_SCRATCH_RENDERER_HPP
 #define _3D_FROM_SCRATCH_RENDERER_HPP
 
+#include "model.hpp"
+#include "timer.hpp"
+
 #include <SFML/Graphics.hpp>
+#include <glm/ext/matrix_clip_space.hpp>
 #include <glm/gtx/compatibility.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -27,7 +31,53 @@ public:
   {
   }
 
-  void plot(std::size_t x, std::size_t y, std::uint32_t color)
+  void render(const Model& model [[maybe_unused]])
+  {
+    static auto s_timer = Timer{};
+    // model -> world -> camera -> projection -> screen
+    auto model_matrix = glm::rotate(glm::mat4{ 1.0F }, static_cast<float>(s_timer.elapsed()) / 500.0F, glm::vec3{ 0.0F, 1.0F, 0.0F });
+    auto view_matrix = glm::lookAt(glm::vec3{ 0.0F, 1.5F, 5.0F }, glm::vec3{ 0.0F, 1.5F, 0.0 }, glm::vec3{ 0.0F, 1.0F, 0.0F });
+    auto projection_matrix = glm::perspective(30.0F, static_cast<float>(m_render_width) / static_cast<float>(m_render_height), 0.1F, 100.0F);
+    [[maybe_unused]] auto transform_matrix = projection_matrix * view_matrix * model_matrix;
+    for (const auto& mesh : model.meshes) {
+      for (const auto& face : mesh.faces) {
+        [[maybe_unused]] auto pos_a = transform_matrix * glm::vec4{ face[0].position, 1.0F };
+        pos_a /= pos_a.w;
+        pos_a.x += 1.0F;
+        pos_a.x *= static_cast<float>(m_render_width) * 0.5F;
+        pos_a.y += 1.0F;
+        pos_a.y *= static_cast<float>(m_render_height) * 0.5F;
+        [[maybe_unused]] auto pos_b = transform_matrix * glm::vec4{ face[1].position, 1.0F };
+        pos_b /= pos_b.w;
+        pos_b.x += 1.0F;
+        pos_b.x *= static_cast<float>(m_render_width) * 0.5F;
+        pos_b.y += 1.0F;
+        pos_b.y *= static_cast<float>(m_render_height) * 0.5F;
+        [[maybe_unused]] auto pos_c = transform_matrix * glm::vec4{ face[2].position, 1.0F };
+        pos_c /= pos_c.w;
+        pos_c.x += 1.0F;
+        pos_c.x *= static_cast<float>(m_render_width) * 0.5F;
+        pos_c.y += 1.0F;
+        pos_c.y *= static_cast<float>(m_render_height) * 0.5F;
+
+        [[maybe_unused]] auto scr_a = glm::ivec2{ pos_a.x, pos_a.y };
+        [[maybe_unused]] auto scr_b = glm::ivec2{ pos_b.x, pos_b.y };
+        [[maybe_unused]] auto scr_c = glm::ivec2{ pos_c.x, pos_c.y };
+
+        plot_line(scr_a, scr_b);
+        plot_line(scr_b, scr_c);
+        plot_line(scr_c, scr_a);
+      }
+    }
+  }
+
+  void clear()
+  {
+    static auto s_background = std::vector<std::uint32_t>(m_render_width * m_render_height, 0xFF000000);
+    m_colors = s_background;
+  }
+
+  void plot(std::size_t x, std::size_t y, std::uint32_t color = 0xFFBFBFBF)
   {
     assert(x < m_render_width && y < m_render_height);
     m_colors[y * m_render_width + x] = color;
@@ -39,8 +89,7 @@ public:
     while (true) {
       plot(
         static_cast<std::size_t>(begin.x),
-        static_cast<std::size_t>(begin.y),
-        0xFF00FF00);
+        static_cast<std::size_t>(begin.y));
       if (begin.y == end.y) break;
       begin.y += increment;
     }
@@ -52,8 +101,7 @@ public:
     while (true) {
       plot(
         static_cast<std::size_t>(begin.x),
-        static_cast<std::size_t>(begin.y),
-        0xFF00FF00);
+        static_cast<std::size_t>(begin.y));
       if (begin.x == end.x) break;
       begin.x += increment;
     }
@@ -73,8 +121,7 @@ public:
     while (true) {
       plot(
         static_cast<std::size_t>(begin.x),
-        static_cast<std::size_t>(begin.y),
-        0xFF00FF00);
+        static_cast<std::size_t>(begin.y));
       if (begin.x == end.x && begin.y == end.y) break;
       auto error2{ 2 * error };
       if (error2 >= distance_y) {
