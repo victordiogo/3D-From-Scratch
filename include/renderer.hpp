@@ -82,30 +82,60 @@ inline auto dot_product(const glm::vec4& v, FrustumPlane fplane) -> float
   }
 }
 
-// accepts vertices in clip space
-inline auto clip_triangle(const glm::vec4& vert_a, const glm::vec4& vert_b, const glm::vec4& vert_c) -> std::vector<glm::vec4>
+struct ClipVertex {
+  glm::vec4 position{};
+  glm::vec2 texture_coord{};
+};
+
+struct ScreenVertex {
+  float inv_z{};
+  glm::ivec2 position{};
+  glm::vec2 texture_coord{};
+};
+
+inline auto to_screen_vertex(const ClipVertex& v, int width, int height) -> ScreenVertex
 {
-  auto input = std::vector<glm::vec4>{ vert_a, vert_b, vert_c };
-  auto output = std::vector<glm::vec4>{};
+  assert(v.position.w != 0.0F);
+  auto norm_x = v.position.x / v.position.w;
+  auto norm_y = v.position.y / v.position.w;
+  auto norm_z = v.position.z / v.position.w;
+  return {
+    1.0F / norm_z,
+    glm::ivec2{
+      glm::clamp(static_cast<int>((norm_x * 0.5F + 0.5F) * static_cast<float>(width)), 0, width - 1),
+      glm::clamp(static_cast<int>((norm_y * 0.5F + 0.5F) * static_cast<float>(height)), 0, height - 1) },
+    v.texture_coord
+  };
+}
+
+// accepts vertices in clip space
+inline auto clip_triangle(const ClipVertex& vert_a, const ClipVertex& vert_b, const ClipVertex& vert_c) -> std::vector<ClipVertex>
+{
+  auto input = std::vector<ClipVertex>{ vert_a, vert_b, vert_c };
+  auto output = std::vector<ClipVertex>{};
   output.reserve(5);
   for (auto fplane = 0; fplane < plane_count; ++fplane) {
     auto in_size = input.size();
     auto last_index = in_size - 1;
-    auto last_d = dot_product(input[last_index], static_cast<FrustumPlane>(fplane));
+    auto last_d = dot_product(input[last_index].position, static_cast<FrustumPlane>(fplane));
     for (auto index = 0UZ; index < in_size; ++index) {
-      auto d = dot_product(input[index], static_cast<FrustumPlane>(fplane));
+      auto d = dot_product(input[index].position, static_cast<FrustumPlane>(fplane));
       if (last_d >= 0.0f) {
         output.push_back(input[last_index]);
         if (d < 0.0f) {
           auto t = last_d / (last_d - d);
           assert(t >= 0.0F && t <= 1.0F);
-          output.push_back(glm::lerp(input[last_index], input[index], t));
+          output.push_back(ClipVertex{
+            glm::lerp(input[last_index].position, input[index].position, t),
+            glm::lerp(input[last_index].texture_coord, input[index].texture_coord, t) });
         }
       }
       else if (d >= 0.0f) {
         auto t = last_d / (last_d - d);
         assert(t >= 0.0F && t <= 1.0F);
-        output.push_back(glm::lerp(input[last_index], input[index], t));
+        output.push_back(ClipVertex{
+          glm::lerp(input[last_index].position, input[index].position, t),
+          glm::lerp(input[last_index].texture_coord, input[index].texture_coord, t) });
       }
       last_index = index;
       last_d = d;
@@ -131,8 +161,8 @@ public:
   void render(const Model& model)
   {
     static auto s_timer = Timer{};
-    auto model_matrix = glm::rotate(glm::mat4{ 1.0F }, static_cast<float>(s_timer.elapsed()) / 5000.0F, glm::vec3{ 0.0F, 1.0F, 0.0F });
-    // model_matrix = glm::translate(model_matrix, { -3, 0, 0 });
+    auto model_matrix = glm::rotate(glm::mat4{ 1.0F }, static_cast<float>(s_timer.elapsed()) / 3000.0F, glm::vec3{ 0.0F, 1.0F, 0.0F });
+    model_matrix = glm::translate(model_matrix, { 6 * glm::sin(s_timer.elapsed() / 2000.0), 0, 0 });
     auto view_matrix = glm::lookAt(glm::vec3{ 0.0F, 1.5F, 5.0F }, glm::vec3{ 0.0F, 1.5F, 0.0 }, glm::vec3{ 0.0F, -1.0F, 0.0F });
     auto projection_matrix = glm::perspective(glm::radians(60.0F), static_cast<float>(m_render_width) / static_cast<float>(m_render_height), 0.1F, 100.0F);
     auto transform_matrix = projection_matrix * view_matrix * model_matrix;
@@ -143,11 +173,17 @@ public:
         auto vert_c = transform_matrix * glm::vec4{ face[2].position, 1.0F };
         if (is_triangle_outside_frustum(vert_a, vert_b, vert_c)) continue;
         if (is_triangle_inside_frustum(vert_a, vert_b, vert_c)) {
-          render_triangle(vert_a, vert_b, vert_c);
+          render_triangle(
+            ClipVertex{ vert_a, face[0].texture_coord },
+            ClipVertex{ vert_b, face[1].texture_coord },
+            ClipVertex{ vert_c, face[2].texture_coord });
         }
         else {
           // interpolate texture coordinates
-          auto clipped_verts = clip_triangle(vert_a, vert_b, vert_c);
+          auto clipped_verts = clip_triangle(
+            ClipVertex{ vert_a, face[0].texture_coord },
+            ClipVertex{ vert_b, face[1].texture_coord },
+            ClipVertex{ vert_c, face[2].texture_coord });
           for (auto index = 2UZ; index < clipped_verts.size(); ++index) {
             render_triangle(clipped_verts[0], clipped_verts[index - 1], clipped_verts[index]);
           }
@@ -156,34 +192,16 @@ public:
     }
   }
 
-  void render_triangle(glm::vec4 vert_a, glm::vec4 vert_b, glm::vec4 vert_c)
+  void render_triangle(const ClipVertex& vert_a, const ClipVertex& vert_b, const ClipVertex& vert_c)
   {
-    assert(vert_a.w != 0.0F && vert_b.w != 0.0F && vert_c.w != 0.0F);
-    vert_a /= vert_a.w;
-    vert_a.x += 1.0F;
-    vert_a.x *= static_cast<float>(m_render_width) * 0.5F;
-    vert_a.y += 1.0F;
-    vert_a.y *= static_cast<float>(m_render_height) * 0.5F;
-    vert_b /= vert_b.w;
-    vert_b.x += 1.0F;
-    vert_b.x *= static_cast<float>(m_render_width) * 0.5F;
-    vert_b.y += 1.0F;
-    vert_b.y *= static_cast<float>(m_render_height) * 0.5F;
-    vert_c /= vert_c.w;
-    vert_c.x += 1.0F;
-    vert_c.x *= static_cast<float>(m_render_width) * 0.5F;
-    vert_c.y += 1.0F;
-    vert_c.y *= static_cast<float>(m_render_height) * 0.5F;
-
-    auto min_bounds = glm::ivec2{ 0 };
-    auto max_bounds = glm::ivec2{ m_render_width - 1, m_render_height - 1 };
-    auto scr_a = glm::clamp(glm::ivec2{ vert_a.x, vert_a.y }, min_bounds, max_bounds);
-    auto scr_b = glm::clamp(glm::ivec2{ vert_b.x, vert_b.y }, min_bounds, max_bounds);
-    auto scr_c = glm::clamp(glm::ivec2{ vert_c.x, vert_c.y }, min_bounds, max_bounds);
-
-    plot_line(scr_a, scr_b);
-    plot_line(scr_b, scr_c);
-    plot_line(scr_c, scr_a);
+    auto width = static_cast<int>(m_render_width);
+    auto height = static_cast<int>(m_render_height);
+    auto screen_vert_a = to_screen_vertex(vert_a, width, height);
+    auto screen_vert_b = to_screen_vertex(vert_b, width, height);
+    auto screen_vert_c = to_screen_vertex(vert_c, width, height);
+    plot_line(screen_vert_a.position, screen_vert_b.position);
+    plot_line(screen_vert_b.position, screen_vert_c.position);
+    plot_line(screen_vert_c.position, screen_vert_a.position);
   }
 
   void clear()
