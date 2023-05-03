@@ -179,7 +179,6 @@ public:
             ClipVertex{ vert_c, face[2].texture_coord });
         }
         else {
-          // interpolate texture coordinates
           auto clipped_verts = clip_triangle(
             ClipVertex{ vert_a, face[0].texture_coord },
             ClipVertex{ vert_b, face[1].texture_coord },
@@ -192,16 +191,135 @@ public:
     }
   }
 
-  void render_triangle(const ClipVertex& vert_a, const ClipVertex& vert_b, const ClipVertex& vert_c)
+  void render_triangle(const ClipVertex& clip_vert_a, const ClipVertex& clip_vert_b, const ClipVertex& clip_vert_c)
   {
     auto width = static_cast<int>(m_render_width);
     auto height = static_cast<int>(m_render_height);
-    auto screen_vert_a = to_screen_vertex(vert_a, width, height);
-    auto screen_vert_b = to_screen_vertex(vert_b, width, height);
-    auto screen_vert_c = to_screen_vertex(vert_c, width, height);
-    plot_line(screen_vert_a.position, screen_vert_b.position);
-    plot_line(screen_vert_b.position, screen_vert_c.position);
-    plot_line(screen_vert_c.position, screen_vert_a.position);
+    auto vert_a = to_screen_vertex(clip_vert_a, width, height);
+    auto vert_b = to_screen_vertex(clip_vert_b, width, height);
+    auto vert_c = to_screen_vertex(clip_vert_c, width, height);
+    order_vertices_ascending_y(vert_a, vert_b, vert_c);
+
+    if (vert_c.position.y == vert_a.position.y) {
+      // draw horizontal line
+      return;
+    }
+
+    if (vert_a.position.y == vert_b.position.y) {
+      render_top_flat_triangle(vert_a, vert_b, vert_c);
+    }
+    else if (vert_b.position.y == vert_c.position.y) {
+      render_bottom_flat_triangle(vert_a, vert_b, vert_c);
+    }
+    else {
+      auto t = static_cast<float>(vert_b.position.y - vert_a.position.y) / static_cast<float>(vert_c.position.y - vert_a.position.y);
+      auto v = ScreenVertex{
+        vert_b.inv_z,
+        glm::ivec2{ static_cast<float>(vert_a.position.x) + t * static_cast<float>(vert_b.position.x - vert_a.position.x), vert_b.position.y },
+        vert_b.texture_coord
+      };
+      render_bottom_flat_triangle(vert_a, vert_b, v);
+      render_top_flat_triangle(vert_b, v, vert_c);
+    }
+  }
+
+  void render_bottom_flat_triangle(const ScreenVertex& top, const ScreenVertex& bottom_a, const ScreenVertex& bottom_b)
+  {
+    auto topa_dist_x{ std::abs(bottom_a.position.x - top.position.x) };
+    auto topa_dist_y{ top.position.y - bottom_a.position.y };
+    auto topa_inc_x{ top.position.x < bottom_a.position.x ? 1 : -1 };
+    auto topa_error{ topa_dist_x + topa_dist_y };
+    auto topa_x = top.position.x;
+
+    auto topb_dist_x{ std::abs(bottom_b.position.x - top.position.x) };
+    auto topb_dist_y{ top.position.y - bottom_b.position.y };
+    auto topb_inc_x{ top.position.x < bottom_b.position.x ? 1 : -1 };
+    auto topb_error{ topb_dist_x + topb_dist_y };
+    auto topb_x = top.position.x;
+
+    auto y = top.position.y;
+
+    while (true) {
+      plot_horizontal_line(
+        topa_x,
+        topb_x,
+        y);
+      if (topa_x == bottom_a.position.x && topb_x == bottom_b.position.x && y == bottom_a.position.y) break;
+      auto topa_error2{ 2 * topa_error };
+      if (topa_error2 >= topa_dist_y) {
+        if (topa_x == bottom_a.position.x) break;
+        topa_error += topa_dist_y;
+        topa_x += topa_inc_x;
+      }
+      if (topa_error2 <= topa_dist_x) {
+        if (y == bottom_a.position.y) break;
+        topa_error += topa_dist_x;
+        topb_error += topb_dist_x;
+        ++y;
+      }
+      auto topb_error2{ 2 * topb_error };
+      if (topb_error2 >= topb_dist_y) {
+        if (topb_x == bottom_b.position.x) break;
+        topb_error += topb_dist_y;
+        topb_x += topb_inc_x;
+      }
+    }
+  }
+
+  void render_top_flat_triangle(const ScreenVertex& top_a, const ScreenVertex& top_b, const ScreenVertex& bottom)
+  {
+    auto abottom_dist_x{ std::abs(bottom.position.x - top_a.position.x) };
+    auto abottom_dist_y{ top_a.position.y - bottom.position.y };
+    auto abottom_inc_x{ top_a.position.x < bottom.position.x ? 1 : -1 };
+    auto abottom_error{ abottom_dist_x + abottom_dist_y };
+    auto abottom_x = top_a.position.x;
+
+    auto bbottom_dist_x{ std::abs(bottom.position.x - top_b.position.x) };
+    auto bbottom_dist_y{ top_b.position.y - bottom.position.y };
+    auto bbottom_inc_x{ top_b.position.x < bottom.position.x ? 1 : -1 };
+    auto bbottom_error{ bbottom_dist_x + bbottom_dist_y };
+    auto bbottom_x = top_b.position.x;
+
+    auto y = top_a.position.y;
+
+    while (true) {
+      plot_horizontal_line(
+        abottom_x,
+        bbottom_x,
+        y);
+      if (abottom_x == bottom.position.x && bbottom_x == bottom.position.x && y == bottom.position.y) break;
+      auto abottom_error2{ 2 * abottom_error };
+      if (abottom_error2 >= abottom_dist_y) {
+        if (abottom_x == bottom.position.x) break;
+        abottom_error += abottom_dist_y;
+        abottom_x += abottom_inc_x;
+      }
+      if (abottom_error2 <= abottom_dist_x) {
+        if (y == bottom.position.y) break;
+        abottom_error += abottom_dist_x;
+        bbottom_error += bbottom_dist_x;
+        ++y;
+      }
+      auto bbottom_error2{ 2 * bbottom_error };
+      if (bbottom_error2 >= bbottom_dist_y) {
+        if (bbottom_x == bottom.position.x) break;
+        bbottom_error += bbottom_dist_y;
+        bbottom_x += bbottom_inc_x;
+      }
+    }
+  }
+
+  void order_vertices_ascending_y(ScreenVertex& vert_a, ScreenVertex& vert_b, ScreenVertex& vert_c)
+  {
+    if (vert_b.position.y < vert_a.position.y) {
+      std::swap(vert_b, vert_a);
+    }
+    if (vert_c.position.y < vert_b.position.y) {
+      std::swap(vert_b, vert_c);
+    }
+    if (vert_b.position.y < vert_a.position.y) {
+      std::swap(vert_b, vert_a);
+    }
   }
 
   void clear()
@@ -216,6 +334,18 @@ public:
     m_colors[y * m_render_width + x] = color;
   }
 
+  void plot_horizontal_line(int beg_x, int end_x, int y)
+  {
+    auto increment{ beg_x > end_x ? -1 : 1 };
+    while (true) {
+      plot(
+        static_cast<std::size_t>(beg_x),
+        static_cast<std::size_t>(y));
+      if (beg_x == end_x) break;
+      beg_x += increment;
+    }
+  }
+
   void plot_vertical_line(glm::ivec2 begin, const glm::ivec2& end)
   {
     auto increment{ begin.y > end.y ? -1 : 1 };
@@ -228,48 +358,36 @@ public:
     }
   }
 
-  void plot_horizontal_line(glm::ivec2 begin, const glm::ivec2& end)
-  {
-    auto increment{ begin.x > end.x ? -1 : 1 };
-    while (true) {
-      plot(
-        static_cast<std::size_t>(begin.x),
-        static_cast<std::size_t>(begin.y));
-      if (begin.x == end.x) break;
-      begin.x += increment;
-    }
-  }
-
-  void plot_line(glm::ivec2 begin, const glm::ivec2& end)
-  {
-    if (end.x == begin.x) plot_vertical_line(begin, end);
-    if (end.y == begin.y) plot_horizontal_line(begin, end);
-    auto distance_x{ std::abs(end.x - begin.x) };
-    auto distance_y{ -std::abs(end.y - begin.y) };
-    auto increment_x{ begin.x < end.x ? 1 : -1 };
-    auto increment_y{ begin.y < end.y ? 1 : -1 };
-    auto error{ distance_x + distance_y };
-    // auto t{ 0.0 }; // interpolation parameter
-    // auto t_increment{ 1.0 / std::sqrt(distance_x * distance_x + distance_y * distance_y) };
-    while (true) {
-      plot(
-        static_cast<std::size_t>(begin.x),
-        static_cast<std::size_t>(begin.y));
-      if (begin.x == end.x && begin.y == end.y) break;
-      auto error2{ 2 * error };
-      if (error2 >= distance_y) {
-        if (begin.x == end.x) break;
-        error += distance_y;
-        begin.x += increment_x;
-      }
-      if (error2 <= distance_x) {
-        if (begin.y == end.y) break;
-        error += distance_x;
-        begin.y += increment_y;
-      }
-      // t += t_increment;
-    }
-  }
+  // void plot_line(glm::ivec2 begin, const glm::ivec2& end)
+  // {
+  //   if (end.x == begin.x) plot_vertical_line(begin, end);
+  //   if (end.y == begin.y) plot_horizontal_line(begin, end);
+  //   auto distance_x{ std::abs(end.x - begin.x) };
+  //   auto distance_y{ -std::abs(end.y - begin.y) };
+  //   auto increment_x{ begin.x < end.x ? 1 : -1 };
+  //   auto increment_y{ begin.y < end.y ? 1 : -1 };
+  //   auto error{ distance_x + distance_y };
+  //   // auto t{ 0.0 }; // interpolation parameter
+  //   // auto t_increment{ 1.0 / std::sqrt(distance_x * distance_x + distance_y * distance_y) };
+  //   while (true) {
+  //     plot(
+  //       static_cast<std::size_t>(begin.x),
+  //       static_cast<std::size_t>(begin.y));
+  //     if (begin.x == end.x && begin.y == end.y) break;
+  //     auto error2{ 2 * error };
+  //     if (error2 >= distance_y) {
+  //       if (begin.x == end.x) break;
+  //       error += distance_y;
+  //       begin.x += increment_x;
+  //     }
+  //     if (error2 <= distance_x) {
+  //       if (begin.y == end.y) break;
+  //       error += distance_x;
+  //       begin.y += increment_y;
+  //     }
+  //     // t += t_increment;
+  //   }
+  // }
 
   std::size_t render_width() const { return m_render_width; }
   std::size_t render_height() const { return m_render_height; }
