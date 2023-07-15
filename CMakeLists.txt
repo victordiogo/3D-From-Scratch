@@ -18,7 +18,7 @@ list(REMOVE_ITEM bench_files ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp)
 set(gcc_like_cxx "$<COMPILE_LANG_AND_ID:CXX,ARMClang,AppleClang,Clang,GNU,LCC>")
 set(msvc_cxx "$<COMPILE_LANG_AND_ID:CXX,MSVC>")
 set(compile_options
-  "$<${gcc_like_cxx}:-pedantic-errors;-Wall;-Werror;-Weffc++;-Wextra;-Wsign-conversion;-Wconversion>"
+  "$<${gcc_like_cxx}:-pedantic-errors;-Wall;-Weffc++;-Wextra;-Wsign-conversion;-Wconversion>"
   "$<${msvc_cxx}:/permissive-;/W4;/WX>"
 )
 

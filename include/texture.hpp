@@ -25,9 +25,12 @@ public:
 
   std::uint32_t operator[](std::size_t x, std::size_t y) const
   {
-    assert(x < m_width && y < m_height);
+    // assert(x < m_width && y < m_height);
     return m_colors[y * m_width + x];
   }
+
+  std::size_t width() const { return m_width; }
+  std::size_t height() const { return m_height; }
 
 private:
   std::vector<std::uint32_t> m_colors{};

@@ -15,6 +15,16 @@
 
 #include "timer.hpp"
 
+uint32_t convertRGBAToABGR(uint32_t rgbaValue)
+{
+  uint32_t r = (rgbaValue >> 24) & 0xFF;
+  uint32_t g = (rgbaValue >> 16) & 0xFF;
+  uint32_t b = (rgbaValue >> 8) & 0xFF;
+  uint32_t a = rgbaValue & 0xFF;
+
+  return (a << 24) | (b << 16) | (g << 8) | r;
+}
+
 auto import_texture(const std::string& texture_path) -> std::optional<Texture>
 {
   auto image = sf::Image{};
@@ -22,11 +32,13 @@ auto import_texture(const std::string& texture_path) -> std::optional<Texture>
     std::cerr << "Could not load the texture " << texture_path << '\n';
     return {};
   }
+  image.flipVertically();
   auto size = image.getSize();
   auto colors = std::vector<std::uint32_t>(size.x * size.y);
   for (auto pixel = 0U; pixel < size.x * size.y; ++pixel) {
     colors.at(pixel)
       = image.getPixel(pixel % size.x, pixel / size.x).toInteger();
+    colors.at(pixel) = convertRGBAToABGR(colors.at(pixel));
   }
   return Texture{ std::move(colors), size.x, size.y };
 }
@@ -180,7 +192,14 @@ auto import_model(const std::string& obj_path) -> std::optional<Model>
           return {};
         }
         line_stream.ignore(std::numeric_limits<std::streamsize>::max(), ' ');
-        face.at(index) = Vertex{ positions.at(position_index - 1), texture_coords.at(texture_coord_index - 1) };
+        auto max_bounds = glm::vec2{
+          output.meshes.back().texture.width() - 1,
+          output.meshes.back().texture.height() - 1
+        };
+        face.at(index) = Vertex{
+          positions.at(position_index - 1),
+          texture_coords.at(texture_coord_index - 1) * max_bounds
+        };
       }
       output.meshes.back().faces.push_back(std::move(face));
     }
