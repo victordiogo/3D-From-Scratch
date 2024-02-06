@@ -7,12 +7,6 @@
 #include <glm/vec3.hpp>
 
 #include <array>
-#include <cassert>
-#include <cstddef>
-#include <cstdint>
-#include <memory>
-#include <stdexcept>
-#include <string>
 #include <vector>
 
 struct Vertex {
@@ -28,6 +22,9 @@ struct Mesh {
 
 struct Model {
   std::vector<Mesh> meshes{};
+  glm::vec3 position{ 0.0F };
+  glm::vec3 rotation{ 0.0F };
+  glm::vec3 scale{ 1.0F };
 };
 
 #endif

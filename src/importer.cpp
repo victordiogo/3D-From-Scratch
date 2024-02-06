@@ -1,6 +1,7 @@
 #include "importer.hpp"
 
 #include <SFML/Graphics/Image.hpp>
+#include <glm/glm.hpp>
 
 #include <algorithm>
 #include <cstdint>
@@ -15,14 +16,12 @@
 
 #include "timer.hpp"
 
-uint32_t convertRGBAToABGR(uint32_t rgbaValue)
+auto to_abgr(const sf::Color& color) -> std::uint32_t
 {
-  uint32_t r = (rgbaValue >> 24) & 0xFF;
-  uint32_t g = (rgbaValue >> 16) & 0xFF;
-  uint32_t b = (rgbaValue >> 8) & 0xFF;
-  uint32_t a = rgbaValue & 0xFF;
-
-  return (a << 24) | (b << 16) | (g << 8) | r;
+  return (static_cast<std::uint32_t>(color.a) << 24)
+         | (static_cast<std::uint32_t>(color.b) << 16)
+         | (static_cast<std::uint32_t>(color.g) << 8)
+         | static_cast<std::uint32_t>(color.r);
 }
 
 auto import_texture(const std::string& texture_path) -> std::optional<Texture>
@@ -36,9 +35,8 @@ auto import_texture(const std::string& texture_path) -> std::optional<Texture>
   auto size = image.getSize();
   auto colors = std::vector<std::uint32_t>(size.x * size.y);
   for (auto pixel = 0U; pixel < size.x * size.y; ++pixel) {
-    colors.at(pixel)
-      = image.getPixel(pixel % size.x, pixel / size.x).toInteger();
-    colors.at(pixel) = convertRGBAToABGR(colors.at(pixel));
+    auto color = image.getPixel(pixel % size.x, pixel / size.x);
+    colors.at(pixel) = to_abgr(color);
   }
   return Texture{ std::move(colors), size.x, size.y };
 }
@@ -160,7 +158,7 @@ auto import_model(const std::string& obj_path) -> std::optional<Model>
         std::cerr << "Could not parse the geometric vertex on line: " << line << '\n';
         return {};
       }
-      positions.push_back(std::move(position));
+      positions.push_back(position);
     }
     else if (head == "vt") {
       auto texture_coord = glm::vec2{};
@@ -169,7 +167,7 @@ auto import_model(const std::string& obj_path) -> std::optional<Model>
         std::cerr << "Could not parse the texture coordinate on line: " << line << '\n';
         return {};
       }
-      texture_coords.push_back(std::move(texture_coord));
+      texture_coords.push_back(texture_coord);
     }
     else if (head == "f") {
       if (output.meshes.size() == 0) {
@@ -201,6 +199,10 @@ auto import_model(const std::string& obj_path) -> std::optional<Model>
           texture_coords.at(texture_coord_index - 1) * max_bounds
         };
       }
+      // // if the triangle is clockwise
+      // if (glm::cross()) {
+
+      // }
       output.meshes.back().faces.push_back(std::move(face));
     }
   }

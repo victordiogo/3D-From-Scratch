@@ -1,6 +1,7 @@
 #ifndef _3D_FROM_SCRATCH_TEXTURE_HPP
 #define _3D_FROM_SCRATCH_TEXTURE_HPP
 
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -17,20 +18,22 @@ public:
     }
   }
 
-  std::uint32_t& operator[](std::size_t x, std::size_t y)
+  auto operator[](std::size_t x, std::size_t y) -> std::uint32_t&
   {
-    assert(x < m_width && y < m_height);
+    x = std::clamp(x, 0UZ, m_width - 1);
+    y = std::clamp(y, 0UZ, m_height - 1);
     return m_colors[y * m_width + x];
   }
 
-  std::uint32_t operator[](std::size_t x, std::size_t y) const
+  auto operator[](std::size_t x, std::size_t y) const -> std::uint32_t
   {
-    // assert(x < m_width && y < m_height);
+    x = std::clamp(x, 0UZ, m_width - 1);
+    y = std::clamp(y, 0UZ, m_height - 1);
     return m_colors[y * m_width + x];
   }
 
-  std::size_t width() const { return m_width; }
-  std::size_t height() const { return m_height; }
+  auto width() const -> std::size_t { return m_width; }
+  auto height() const -> std::size_t { return m_height; }
 
 private:
   std::vector<std::uint32_t> m_colors{};
