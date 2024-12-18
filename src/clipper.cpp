@@ -1,6 +1,6 @@
 #include "clipper.hpp"
 
-#include <glm/gtx/compatibility.hpp>
+#include <glm/glm.hpp>
 
 // Param: vertice in clip space
 auto is_vertice_inside_frustum(const glm::vec4& v) -> bool
@@ -75,16 +75,16 @@ auto clip_triangle(const ClipVertex& vert_a, const ClipVertex& vert_b, const Cli
           auto t = last_d / (last_d - d);
           assert(t >= 0.0F && t <= 1.0F);
           output.push_back(ClipVertex{
-            glm::lerp(input[last_index].position, input[index].position, t),
-            glm::lerp(input[last_index].texture_coord, input[index].texture_coord, t) });
+            glm::mix(input[last_index].position, input[index].position, t),
+            glm::mix(input[last_index].texture_coord, input[index].texture_coord, t) });
         }
       }
       else if (d >= 0.0f) {
         auto t = last_d / (last_d - d);
         assert(t >= 0.0F && t <= 1.0F);
         output.push_back(ClipVertex{
-          glm::lerp(input[last_index].position, input[index].position, t),
-          glm::lerp(input[last_index].texture_coord, input[index].texture_coord, t) });
+          glm::mix(input[last_index].position, input[index].position, t),
+          glm::mix(input[last_index].texture_coord, input[index].texture_coord, t) });
       }
       last_index = index;
       last_d = d;

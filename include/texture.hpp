@@ -18,14 +18,14 @@ public:
     }
   }
 
-  auto operator[](std::size_t x, std::size_t y) -> std::uint32_t&
+  auto at(std::size_t x, std::size_t y) -> std::uint32_t&
   {
     x = std::clamp(x, 0UZ, m_width - 1);
     y = std::clamp(y, 0UZ, m_height - 1);
     return m_colors[y * m_width + x];
   }
 
-  auto operator[](std::size_t x, std::size_t y) const -> std::uint32_t
+  auto at(std::size_t x, std::size_t y) const -> std::uint32_t
   {
     x = std::clamp(x, 0UZ, m_width - 1);
     y = std::clamp(y, 0UZ, m_height - 1);

@@ -73,6 +73,8 @@ auto import_mtllib(const std::string& mtllib_path) -> std::optional<MaterialLib>
         std::cerr << "Could not parse the material name on line: " << line << '\n';
         return {};
       }
+
+      auto found_texture = false;
       while (std::getline(mtl, line)) {
         if (line.starts_with('#') || line.length() == 0) continue;
         line_stream.str(line);
@@ -92,8 +94,13 @@ auto import_mtllib(const std::string& mtllib_path) -> std::optional<MaterialLib>
           auto texture = import_texture(get_directory(mtllib_path) + texture_name);
           if (!texture) return {};
           output.insert(std::pair{ std::move(material_name), std::move(*texture) });
+          found_texture = true;
           break;
         }
+      }
+      if (!found_texture) {
+        std::cerr << "Could not find the diffuse map for material " << material_name << '\n';
+        return {};
       }
     }
   }
@@ -105,8 +112,9 @@ auto import_mtllib(const std::string& mtllib_path) -> std::optional<MaterialLib>
 }
 
 // Wavefront obj importer
-//   accepts triangulated faces
-//   accepts at least one material with a diffuse map
+//   accepts at least one material
+//   each material must have a diffuse map
+//   each face must have a texture coordinate
 auto import_model(const std::string& obj_path) -> std::optional<Model>
 {
   auto obj = std::ifstream{ obj_path };
@@ -174,13 +182,15 @@ auto import_model(const std::string& obj_path) -> std::optional<Model>
         std::cerr << "usemtl must be set before a face element\n";
         return {};
       }
-      auto face = Mesh::Face{};
-      for (auto index = 0UZ; index < 3UZ; ++index) {
-        auto position_index = std::size_t{};
-        line_stream >> position_index;
+      
+      auto vertices = std::vector<Vertex>{};
+      auto position_index = std::size_t{};
+      while (line_stream >> position_index) {
         line_stream.get();
+
         auto texture_coord_index = std::size_t{};
         line_stream >> texture_coord_index;
+
         if (!line_stream) {
           std::cerr << "Could not parse indices on line: " << line << '\n';
           return {};
@@ -189,21 +199,28 @@ auto import_model(const std::string& obj_path) -> std::optional<Model>
           std::cerr << "Invalid indices on line: " << line << '\n';
           return {};
         }
+
         line_stream.ignore(std::numeric_limits<std::streamsize>::max(), ' ');
+
         auto max_bounds = glm::vec2{
           output.meshes.back().texture.width() - 1,
           output.meshes.back().texture.height() - 1
         };
-        face.at(index) = Vertex{
+
+        vertices.push_back(Vertex{
           positions.at(position_index - 1),
           texture_coords.at(texture_coord_index - 1) * max_bounds
-        };
+        });
       }
-      // // if the triangle is clockwise
-      // if (glm::cross()) {
 
-      // }
-      output.meshes.back().faces.push_back(std::move(face));
+      for (auto i = 1U; i < vertices.size() - 1; ++i) {
+        auto face = Mesh::Face{
+          vertices.at(0),
+          vertices.at(i),
+          vertices.at(i + 1)
+        };
+        output.meshes.back().faces.push_back(std::move(face));
+      }
     }
   }
   if (output.meshes.size() == 0) {

@@ -4,7 +4,7 @@
 #include "timer.hpp"
 
 #include <glm/ext/matrix_clip_space.hpp>
-#include <glm/gtx/compatibility.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/trigonometric.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
@@ -38,23 +38,28 @@ void Renderer::render(const Scene& scene)
       auto vert_a = transform_matrix * glm::vec4{ face[0].position, 1.0F };
       auto vert_b = transform_matrix * glm::vec4{ face[1].position, 1.0F };
       auto vert_c = transform_matrix * glm::vec4{ face[2].position, 1.0F };
-      if (is_triangle_outside_frustum(vert_a, vert_b, vert_c)) continue;
-      if (is_triangle_inside_frustum(vert_a, vert_b, vert_c)) {
-        render_triangle(
-          ClipVertex{ vert_a, face[0].texture_coord },
-          ClipVertex{ vert_b, face[1].texture_coord },
-          ClipVertex{ vert_c, face[2].texture_coord },
-          mesh.texture);
-      }
-      else {
-        auto clipped_verts = clip_triangle(
-          ClipVertex{ vert_a, face[0].texture_coord },
-          ClipVertex{ vert_b, face[1].texture_coord },
-          ClipVertex{ vert_c, face[2].texture_coord });
-        for (auto index = 2UZ; index < clipped_verts.size(); ++index) {
-          render_triangle(clipped_verts[0], clipped_verts[index - 1], clipped_verts[index], mesh.texture);
-        }
-      }
+      render_triangle(
+        ClipVertex{ vert_a, face[0].texture_coord },
+        ClipVertex{ vert_b, face[1].texture_coord },
+        ClipVertex{ vert_c, face[2].texture_coord },
+        mesh.texture);
+      // if (is_triangle_outside_frustum(vert_a, vert_b, vert_c)) continue;
+      // if (is_triangle_inside_frustum(vert_a, vert_b, vert_c)) {
+      //   render_triangle(
+      //     ClipVertex{ vert_a, face[0].texture_coord },
+      //     ClipVertex{ vert_b, face[1].texture_coord },
+      //     ClipVertex{ vert_c, face[2].texture_coord },
+      //     mesh.texture);
+      // }
+      // else {
+      //   auto clipped_verts = clip_triangle(
+      //     ClipVertex{ vert_a, face[0].texture_coord },
+      //     ClipVertex{ vert_b, face[1].texture_coord },
+      //     ClipVertex{ vert_c, face[2].texture_coord });
+      //   for (auto index = 2UZ; index < clipped_verts.size(); ++index) {
+      //     render_triangle(clipped_verts[0], clipped_verts[index - 1], clipped_verts[index], mesh.texture);
+      //   }
+      // }
     }
   }
 }
@@ -164,18 +169,18 @@ void Renderer::render_triangle(const ClipVertex& p, const ClipVertex& q, const C
 
     for (auto x = xmin; x <= xmax; ++x) {
       if (wa_x >= 0 && wb_x >= 0 && wc_x >= 0) {
-        assert(x < m_render_width && y < m_render_height);
+        assert(x < static_cast<int>(m_render_width) && y < static_cast<int>(m_render_height));
         auto alpha = from_fixed(wa_x) * inv_area;
         auto beta = from_fixed(wb_x) * inv_area;
         auto gama = from_fixed(wc_x) * inv_area;
+    
         auto z = 1.0F / (alpha * inv_z_a + beta * inv_z_b + gama * inv_z_c);
         auto screen_index = static_cast<std::size_t>(y) * m_render_width
                             + static_cast<std::size_t>(x);
         if (z < m_depth[screen_index]) {
           m_depth[screen_index] = z;
           auto tcoord = z * (alpha * tcoord_a + beta * tcoord_b + gama * tcoord_c);
-          m_colors[screen_index]
-            = texture[static_cast<std::size_t>(tcoord.x), static_cast<std::size_t>(tcoord.y)];
+          m_colors[screen_index] = texture.at(static_cast<std::size_t>(tcoord.x), static_cast<std::size_t>(tcoord.y));
         }
       }
       wa_x += wa_xinc;

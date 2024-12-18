@@ -31,9 +31,11 @@ auto main() -> int
   // std::cout << "Enter the model obj file path (with \"/\" delimiters): ";
   // std::getline(std::cin >> std::ws, model_path);
   // auto model = import_model(model_path);
-  auto model = import_model("C:/Users/Victor/Documents/3d_models/Skull/model.obj");
+  auto model = import_model("../models/car/car.obj");
   if (!model) return 1;
-  model->position.z = 0;
+  model->position.z = -2;
+  model->position.y = -1;
+  model->scale = glm::vec3{ 0.01F, 0.01F, 0.01F };
 
   auto scene = Scene{ *model };
 
@@ -56,7 +58,7 @@ auto main() -> int
     window.display();
     window.setTitle("Render time: " + std::to_string(timer.elapsed()) + "ms");
 
-    model->rotation.y += static_cast<float>(timer.elapsed() / 1000.0);
+    model->rotation.y += static_cast<float>(timer.elapsed() / 2000.0);
   }
 
   return 0;
